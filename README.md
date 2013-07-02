@@ -27,7 +27,7 @@ weblogicSecurityBean.runPrivilegedActionAsSubject(new PrivilegedAction() {
              }
 });
 ```
-Given 
+Given the above code block, we add it for each of the required scenarios as described below:
 * **Publishing With Spring** - Using the WeblogicSecurityBean instance (created by Spring) the test pubSpringSubCamel wraps a Spring JMS template send call as a privilleged action 
 * **Subscribing with Spring** - In this case we needed to create our own ThreadFactory _com.test.weblogic.WeblogicSecureThreadFactory_ that decorates the newThread Runnable with the PriviledgedAction (executing the child run within); refer to the bean _weblogicThreadFactory_ in the Spring context. The intention here is that any thread listening for messages using DefaultMessageListenerContainer now has permission to do so. Because we're using a non-standard thread factory we have to create a task executor ThreadPoolTaskExecutor instantiated as the bean _jmsTaskExecutor_, which is then assigned to the message listener container _simpleMessageListener_. This uses a MessageListener _com.test.weblogic.SimpleMDB_ for testing purposes
 * **Subscribing with Camel** - This is very similar to the approach for subscribing with Spring (since they are the same technologies). In this case I set the taskExecutor parameter for the JmsConfiguration to _jmsTaskExecutor_
