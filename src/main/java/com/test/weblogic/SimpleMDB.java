@@ -9,8 +9,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * User: d.macdonald@auckland.ac.nz
- * Date: 1/07/13
+ * A simple MDB to receive messages to an internal list
  */
 public class SimpleMDB implements MessageListener {
 
