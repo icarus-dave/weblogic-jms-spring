@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+    <!-- all of the relevant properties files -->
+    <bean id="messagingDefaults" class="org.apache.camel.spring.spi.BridgePropertyPlaceholderConfigurer">
+        <property name="ignoreResourceNotFound" value="true"/>
+        <property name="locations">
+            <list>
+                <value>classpath:META-INF/spring/defaults.properties</value>
+            </list>
+        </property>
+    </bean>
+
+    <!-- the bean that carries out privileged actions -->
+    <bean name="weblogicSecurityBean" class="com.test.weblogic.WeblogicSecurityBean">
+        <property name="providerUrl" value="${jms.providerUrl}"/>
+      	<property name="securityPrincipal" value="${jms.username}"/>
+        <property name="securityCredentials" value="${jms.password}"/>
+    </bean>
+
+    <!-- create the thread factory with the appropriate credentials and assign them to the JMS thread executor -->
+    <bean id="weblogicThreadFactory" class="com.test.weblogic.WeblogicSecureThreadFactory">
+        <property name="name" value="jmsSubscribers"/>
+        <property name="weblogicSecurityBean" ref="weblogicSecurityBean"/>
+    </bean>
+    <bean id="jmsTaskExecutor" class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+        <property name="beanName" value="jmsTaskExecutor"/>
+        <property name="threadFactory" ref="weblogicThreadFactory"/>
+        <property name="corePoolSize" value="${jms.concurrentConsumers}"/>
+        <property name="queueCapacity" value="0"/>
+    </bean>
+
+    <!-- standard Spring WebLogic JMS configuration -->
+    <bean id="jndiTemplate" class="org.springframework.jndi.JndiTemplate">
+        <property name="environment">
+            <props>
+                <prop key="java.naming.factory.initial">weblogic.jndi.WLInitialContextFactory</prop>
+                <prop key="java.naming.provider.url">${jms.providerUrl}</prop>
+                <prop key="java.naming.security.principal">${jms.username}</prop>
+                <prop key="java.naming.security.credentials">${jms.password}</prop>
+            </props>
+        </property>
+    </bean>
+    <bean id="connectionFactory" class="org.springframework.jndi.JndiObjectFactoryBean">
+        <property name="jndiTemplate" ref="jndiTemplate"/>
+        <property name="jndiName" value="${jms.connectionFactory}"/>
+        <property name="exposeAccessContext" value="true"/>
+        <property name="lookupOnStartup" value="false"/>
+        <property name="proxyInterface" value="javax.jms.ConnectionFactory"/>
+    </bean>
+    <bean id="jmsDestinationResolver" class="org.springframework.jms.support.destination.JndiDestinationResolver">
+        <property name="jndiTemplate" ref="jndiTemplate"/>
+    </bean>
+
+    <!-- Spring Stand alone JMS configuration -->
+    <bean id="jmsTemplate" class="org.springframework.jms.core.JmsTemplate">
+        <property name="connectionFactory" ref="connectionFactory"/>
+        <property name="destinationResolver" ref="jmsDestinationResolver"/>
+    </bean>
+
+    <bean id="jmsDestination" class="org.springframework.jndi.JndiObjectFactoryBean">
+        <property name="jndiTemplate" ref="jndiTemplate"/>
+        <property name="jndiName" value="${jms.destination}"/>
+    </bean>
+
+    <!-- A simple MDB listener for testing purposes -->
+    <bean id="simpleMDB" class="com.test.weblogic.SimpleMDB"/>
+    <bean id="simpleMessageListener" class="org.springframework.jms.listener.DefaultMessageListenerContainer">
+        <property name="concurrentConsumers" value="${jms.concurrentConsumers}"/>
+        <property name="connectionFactory" ref="connectionFactory"/>
+        <property name="destination" ref="jmsDestination"/>
+        <property name="messageListener" ref="simpleMDB"/>
+        <property name="taskExecutor" ref="jmsTaskExecutor"/>
+        <property name="autoStartup" value="false"/>
+    </bean>
+
+    <!-- Camel configuration -->
+    <camelContext xmlns="http://camel.apache.org/schema/spring" id="camelContext" autoStartup="true"/>
+
+    <bean id="jmsConfig" class="org.apache.camel.component.jms.JmsConfiguration">
+        <property name="connectionFactory" ref="connectionFactory"/>
+        <property name="destinationResolver" ref="jmsDestinationResolver"/>
+        <property name="taskExecutor" ref="jmsTaskExecutor"/>
+        <property name="concurrentConsumers" value="${jms.concurrentConsumers}"/>
+    </bean>
+
+    <!-- this will automatically be picked up by the Camel context to intercept calls to JMS endpoints -->
+    <bean id="jmsInterceptStrategy" class="com.test.weblogic.WeblogicSecurityInterceptStrategy">
+        <property name="weblogicSecurityBean" ref="weblogicSecurityBean"/>
+    </bean>
+
+</beans>
